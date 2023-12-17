@@ -1,0 +1,14 @@
+{
+    "token": "",
+    "store": "data",
+    "welcome_voice": {
+        "channel_id": "",
+        "voice_duration": "30s",
+        "emoji": "👌"
+    },
+    "boom_message": {
+        "channel_id":  "",
+        "dead_after":  "168h",
+        "save_after": "1m"
+    }
+}
