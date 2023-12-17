@@ -164,7 +164,7 @@ func (w *WelcomeVoice) downloadSound(attach *discordgo.MessageAttachment) (strin
 }
 
 func (w *WelcomeVoice) convertSound(from, to string) error {
-	cmd := exec.Command("ffmpeg", "-y", "-i", from, "-c:a", "libopus", "-page_duration", "20000", to)
+	cmd := exec.Command("ffmpeg", "-y", "-vn", "-i", from, "-c:a", "libopus", "-page_duration", "20000", to)
 
 	if output, err := cmd.Output(); err != nil {
 		return fmt.Errorf("ffmpeg: %s, %w", string(output), err)
