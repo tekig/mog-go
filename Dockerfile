@@ -18,6 +18,4 @@ RUN DEBIAN_FRONTEND=noninteractive apt update && apt install -y ffmpeg && rm -rf
 
 COPY --from=build /mog .
 
-ENV CONFIG=/etc/mog
-
 CMD ["/app/mog"]

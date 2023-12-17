@@ -6,7 +6,7 @@
 docker run -d \
   --name mog \
   --restart always \
-  -v /opt/mog/config:/etc/mog \
+  -v /opt/mog/config:/app/cfg \
   -v /opt/mog/data:/app/data \
   ghcr.io/tekig/mog-go:master
 ```
