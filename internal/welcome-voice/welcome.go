@@ -24,10 +24,11 @@ const (
 )
 
 type WelcomeVoice struct {
-	config Config
-	client *discordgo.Session
-	logger *log.Logger
-	mu     sync.Mutex
+	config        Config
+	client        *discordgo.Session
+	logger        *log.Logger
+	channelByUser map[string]string
+	mu            sync.Mutex
 
 	shutdown []func() error
 }
@@ -36,9 +37,10 @@ func New(config Config, client *discordgo.Session, logger *log.Logger) (*Welcome
 	logger.SetPrefix("[Welcome Voice]: ")
 
 	w := &WelcomeVoice{
-		config: config,
-		client: client,
-		logger: logger,
+		config:        config,
+		client:        client,
+		logger:        logger,
+		channelByUser: make(map[string]string),
 	}
 
 	if err := os.MkdirAll(config.VoiceDir, os.ModePerm); err != nil {
@@ -185,6 +187,17 @@ func (w *WelcomeVoice) onMessageCreate(s *discordgo.Session, m *discordgo.Messag
 	if err := w.prepareSound(m.Message); err != nil {
 		w.logger.Printf("message create: prepare sound: %s", err.Error())
 		_ = w.client.ChannelMessageDelete(m.ChannelID, m.ID)
+		return
+	}
+
+	channelID, ok := w.channelByUser[m.Author.ID]
+	if !ok {
+		return
+	}
+
+	if err := w.play(m.Author.ID, m.GuildID, channelID); err != nil {
+		w.logger.Printf("message create: play: %s", err.Error())
+		return
 	}
 }
 
@@ -192,23 +205,26 @@ func (w *WelcomeVoice) onConnect(_ *discordgo.Session, u *discordgo.VoiceStateUp
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	if err := w.play(u); err != nil {
+	if u.BeforeUpdate != nil {
+		delete(w.channelByUser, u.UserID)
+		return
+	}
+
+	w.channelByUser[u.UserID] = u.ChannelID
+
+	if err := w.play(u.UserID, u.GuildID, u.ChannelID); err != nil {
 		w.logger.Printf("on connect: play: %s", err.Error())
 	}
 }
 
-func (w *WelcomeVoice) play(update *discordgo.VoiceStateUpdate) error {
-	if update.BeforeUpdate != nil {
-		return nil
-	}
-
-	f, err := os.Open(w.pathSoundData(update.UserID))
+func (w *WelcomeVoice) play(userID, guildID, channelID string) error {
+	f, err := os.Open(w.pathSoundData(userID))
 	if err != nil {
 		return fmt.Errorf("open file: %w", err)
 	}
 	defer f.Close()
 
-	voice, err := w.client.ChannelVoiceJoin(update.GuildID, update.ChannelID, false, true)
+	voice, err := w.client.ChannelVoiceJoin(guildID, channelID, false, true)
 	if err != nil {
 		return fmt.Errorf("channel voice join: %w", err)
 	}
