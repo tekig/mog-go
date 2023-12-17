@@ -39,6 +39,10 @@ func New(config Config, client *discordgo.Session, logger *log.Logger) (*BoomMes
 		repository: make(map[string]time.Time),
 	}
 
+	if err := os.MkdirAll(config.MessageDir, os.ModePerm); err != nil {
+		return nil, fmt.Errorf("mkdir message dir: %w", err)
+	}
+
 	if err := b.loadMessage(); err != nil {
 		return nil, fmt.Errorf("load message: %w", err)
 	}

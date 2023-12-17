@@ -41,6 +41,10 @@ func New(config Config, client *discordgo.Session, logger *log.Logger) (*Welcome
 		logger: logger,
 	}
 
+	if err := os.MkdirAll(config.VoiceDir, os.ModePerm); err != nil {
+		return nil, fmt.Errorf("mkdir voice dir: %w", err)
+	}
+
 	cancelConnect := w.client.AddHandler(w.onConnect)
 	w.shutdown = append(w.shutdown, func() error {
 		cancelConnect()
