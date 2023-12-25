@@ -120,7 +120,7 @@ func (w *WelcomeVoice) prepareSound(m *discordgo.Message) error {
 		return ErrVoiceTooLarge
 	}
 
-	path, err := w.downloadSound(attach)
+	path, err := w.downloadSound(attach.ProxyURL)
 	if err != nil {
 		return fmt.Errorf("download sound: %w", err)
 	}
@@ -137,13 +137,35 @@ func (w *WelcomeVoice) prepareSound(m *discordgo.Message) error {
 	return nil
 }
 
-func (w *WelcomeVoice) downloadSound(attach *discordgo.MessageAttachment) (string, error) {
-	exts, err := mime.ExtensionsByType(attach.ContentType)
+func (w *WelcomeVoice) randomSound(userID string) error {
+	path, err := w.downloadSound("http://api.cleanvoice.ru/myinstants/?type=file")
 	if err != nil {
-		return "", fmt.Errorf("extension %s: %w", attach.ContentType, err)
+		return fmt.Errorf("download: %w", err)
+	}
+	defer os.Remove(path)
+
+	if err := w.convertSound(path, w.pathSoundData(userID)); err != nil {
+		return fmt.Errorf("conver sound: %w", err)
+	}
+
+	return nil
+}
+
+func (w *WelcomeVoice) downloadSound(uri string) (string, error) {
+	r, err := http.Get(uri)
+	if err != nil {
+		return "", fmt.Errorf("get: %w", err)
+	}
+	defer r.Body.Close()
+
+	ct := r.Header.Get("content-type")
+
+	exts, err := mime.ExtensionsByType(ct)
+	if err != nil {
+		return "", fmt.Errorf("extension %s: %w", ct, err)
 	}
 	if len(exts) < 1 {
-		return "", fmt.Errorf("extension %s: %w", attach.ContentType, ErrExtensionNotFound)
+		return "", fmt.Errorf("extension %s: %w", ct, ErrExtensionNotFound)
 	}
 
 	f, err := os.CreateTemp("", "mog-*"+exts[0])
@@ -151,12 +173,6 @@ func (w *WelcomeVoice) downloadSound(attach *discordgo.MessageAttachment) (strin
 		return "", fmt.Errorf("crate temp: %w", err)
 	}
 	defer f.Close()
-
-	r, err := http.Get(attach.ProxyURL)
-	if err != nil {
-		return "", fmt.Errorf("get: %w", err)
-	}
-	defer r.Body.Close()
 
 	if _, err := io.Copy(f, r.Body); err != nil {
 		return "", fmt.Errorf("download: %w", err)
@@ -195,13 +211,26 @@ func (w *WelcomeVoice) onMessageCreate(s *discordgo.Session, m *discordgo.Messag
 		return
 	}
 
-	if err := w.play(m.Author.ID, m.GuildID, channelID); err != nil {
+	if err := w.play(m.Author.ID, m.GuildID, channelID); errors.Is(err, os.ErrNotExist) {
+		if err := w.randomSound(m.Author.ID); err != nil {
+			w.logger.Printf("message create: random prepare: %s", err.Error())
+			return
+		}
+		if err := w.play(m.Author.ID, m.GuildID, channelID); err != nil {
+			w.logger.Printf("message create: random play: %s", err.Error())
+			return
+		}
+	} else if err != nil {
 		w.logger.Printf("message create: play: %s", err.Error())
 		return
 	}
 }
 
 func (w *WelcomeVoice) onConnect(_ *discordgo.Session, u *discordgo.VoiceStateUpdate) {
+	if u.UserID == w.client.State.User.ID {
+		return
+	}
+
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -212,8 +241,18 @@ func (w *WelcomeVoice) onConnect(_ *discordgo.Session, u *discordgo.VoiceStateUp
 
 	w.channelByUser[u.UserID] = u.ChannelID
 
-	if err := w.play(u.UserID, u.GuildID, u.ChannelID); err != nil {
+	if err := w.play(u.UserID, u.GuildID, u.ChannelID); errors.Is(err, os.ErrNotExist) {
+		if err := w.randomSound(u.UserID); err != nil {
+			w.logger.Printf("on connect: random prepare: %s", err.Error())
+			return
+		}
+		if err := w.play(u.UserID, u.GuildID, u.ChannelID); err != nil {
+			w.logger.Printf("on connect: random play: %s", err.Error())
+			return
+		}
+	} else if err != nil {
 		w.logger.Printf("on connect: play: %s", err.Error())
+		return
 	}
 }
 

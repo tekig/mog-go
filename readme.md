@@ -10,3 +10,6 @@ docker run -d \
   -v /opt/mog/data:/app/data \
   ghcr.io/tekig/mog-go:master
 ```
+
+# Third party used
+- Random sounds will be downloaded via [MyInstans](www.myinstants.com)
