@@ -47,6 +47,10 @@ func New(config Config, client *discordgo.Session, logger *log.Logger) (*Welcome
 		return nil, fmt.Errorf("mkdir voice dir: %w", err)
 	}
 
+	if err := mime.AddExtensionType(".mp3", "audio/mpeg3"); err != nil {
+		return nil, fmt.Errorf("add extension: %w", err)
+	}
+
 	cancelConnect := w.client.AddHandler(w.onConnect)
 	w.shutdown = append(w.shutdown, func() error {
 		cancelConnect()
