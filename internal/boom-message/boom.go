@@ -82,13 +82,23 @@ func New(config Config, client *discordgo.Session, logger *log.Logger) (*BoomMes
 }
 
 func (b *BoomMessage) Run(ctx context.Context) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	var wg sync.WaitGroup
 
 	wg.Add(1)
-	go b.runTicker(ctx)
+	go func() {
+		defer cancel()
+		defer wg.Done()
+		b.runTicker(ctx)
+	}()
 
 	wg.Add(1)
-	go b.runBoom(ctx)
+	go func() {
+		defer cancel()
+		defer wg.Done()
+		b.runBoom(ctx)
+	}()
 
 	wg.Wait()
 

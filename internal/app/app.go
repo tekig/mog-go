@@ -75,10 +75,14 @@ func (a *App) Run(ctx context.Context) error {
 		errs []error
 	)
 
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	wg.Add(len(a.runners))
 	for _, r := range a.runners {
 		r := r
 		go func() {
+			defer cancel()
 			defer wg.Done()
 
 			if err := r(ctx); err != nil {
