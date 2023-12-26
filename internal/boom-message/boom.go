@@ -174,7 +174,7 @@ func (b *BoomMessage) readRepository() (map[string]time.Time, error) {
 }
 
 func (b *BoomMessage) runTicker(ctx context.Context) {
-	tick := time.NewTicker(b.config.DeadAfter.Duration)
+	tick := time.NewTicker(b.config.SaveAfter.Duration)
 	defer tick.Stop()
 
 	var prev = make(map[string]time.Time)
@@ -266,7 +266,7 @@ func (b *BoomMessage) writeRepository() error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	f, err := os.OpenFile(path.Join(b.config.MessageDir, messageName), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
+	f, err := os.OpenFile(path.Join(b.config.MessageDir, messageName), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return fmt.Errorf("load message: %w", err)
 	}
