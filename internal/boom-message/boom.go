@@ -249,8 +249,7 @@ func (b *BoomMessage) runBoom(ctx context.Context) {
 			}
 
 			if err := b.client.ChannelMessageDelete(b.config.ChannelID, messageID); err != nil {
-				b.logger.Printf("run boom: channel message delete: %s", err.Error())
-				continue
+				b.logger.Printf("run boom: channel message delete #%s: %s", messageID, err.Error())
 			}
 
 			b.mu.Lock()
