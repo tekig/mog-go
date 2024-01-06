@@ -1,6 +1,7 @@
 package welcomevoice
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -273,7 +274,7 @@ func (w *WelcomeVoice) play(userID, guildID, channelID string) error {
 	}
 	defer func() { _ = voice.Disconnect() }()
 
-	reader, _, err := oggreader.NewWith(f)
+	reader, _, err := oggreader.NewWith(bufio.NewReader(f))
 	if err != nil {
 		return fmt.Errorf("ogg reader: %w", err)
 	}
