@@ -226,6 +226,9 @@ func (w *WelcomeVoice) onMessageCreate(s *discordgo.Session, m *discordgo.Messag
 		return
 	}
 
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
 	if err := w.prepareSound(m.Message); err != nil {
 		w.logger.Printf("message create: prepare sound: %s", err.Error())
 		_ = w.client.ChannelMessageDelete(m.ChannelID, m.ID)
