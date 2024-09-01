@@ -16,7 +16,9 @@ import (
 )
 
 const (
-	messageName = "messages.json"
+	storageName    = "messages.json"
+	tmpStorageName = "messages.json.tmp"
+	bakStorageName = "messages.json.bak"
 )
 
 type BoomMessage struct {
@@ -159,15 +161,29 @@ func (b *BoomMessage) readRepository() (map[string]time.Time, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	f, err := os.Open(path.Join(b.config.MessageDir, messageName))
-	if err != nil {
-		return nil, fmt.Errorf("load message: %w", err)
-	}
-	defer f.Close()
+	readByName := func(name string) (map[string]time.Time, error) {
+		f, err := os.Open(path.Join(b.config.MessageDir, name))
+		if err != nil {
+			return nil, fmt.Errorf("open: %w", err)
+		}
+		defer f.Close()
 
-	var messages = make(map[string]time.Time)
-	if err := json.NewDecoder(f).Decode(&messages); err != nil {
-		return nil, fmt.Errorf("decode: %w", err)
+		var messages = make(map[string]time.Time)
+		if err := json.NewDecoder(f).Decode(&messages); err != nil {
+			return nil, fmt.Errorf("decode: %w", err)
+		}
+
+		return messages, nil
+	}
+
+	messages, err := readByName(storageName)
+	if err != nil {
+		log.Printf("read storage: %s", err.Error())
+
+		messages, err = readByName(bakStorageName)
+		if err != nil {
+			return nil, fmt.Errorf("read backup storage: %w", err)
+		}
 	}
 
 	return messages, nil
@@ -265,14 +281,38 @@ func (b *BoomMessage) writeRepository() error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	f, err := os.OpenFile(path.Join(b.config.MessageDir, messageName), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
-	if err != nil {
-		return fmt.Errorf("load message: %w", err)
-	}
-	defer f.Close()
+	temp := path.Join(b.config.MessageDir, tmpStorageName)
 
-	if err := json.NewEncoder(f).Encode(b.repository); err != nil {
-		return fmt.Errorf("encode: %w", err)
+	if err := func() error {
+		f, err := os.OpenFile(temp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+		if err != nil {
+			return fmt.Errorf("open temp storage: %w", err)
+		}
+		defer f.Close()
+
+		if err := json.NewEncoder(f).Encode(b.repository); err != nil {
+			return fmt.Errorf("encode: %w", err)
+		}
+
+		return nil
+	}(); err != nil {
+		return err
+	}
+
+	backup := path.Join(b.config.MessageDir, bakStorageName)
+
+	if err := os.Remove(backup); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove backup: %w", err)
+	}
+
+	primary := path.Join(b.config.MessageDir, storageName)
+
+	if err := os.Rename(primary, backup); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("move primary to backup: %w", err)
+	}
+
+	if err := os.Rename(temp, primary); err != nil {
+		return fmt.Errorf("move temp to primary: %w", err)
 	}
 
 	return nil
