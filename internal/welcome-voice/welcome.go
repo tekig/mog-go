@@ -17,6 +17,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/pion/webrtc/v4/pkg/media/oggreader"
+	"golang.org/x/exp/slices"
 )
 
 const (
@@ -29,6 +30,7 @@ type WelcomeVoice struct {
 	client        *discordgo.Session
 	logger        *log.Logger
 	channelByUser map[string]string
+	messageByUser map[string]string
 	mu            sync.Mutex
 
 	shutdown []func() error
@@ -42,6 +44,7 @@ func New(config Config, client *discordgo.Session, logger *log.Logger) (*Welcome
 		client:        client,
 		logger:        logger,
 		channelByUser: make(map[string]string),
+		messageByUser: make(map[string]string),
 	}
 
 	if err := os.MkdirAll(config.VoiceDir, os.ModePerm); err != nil {
@@ -96,8 +99,22 @@ func (w *WelcomeVoice) loadMessage() error {
 		beforeID = messages[len(messages)-1].ID
 
 		for _, m := range messages {
+			if _, ok := w.messageByUser[m.Author.ID]; ok {
+				if err := w.client.ChannelMessageDelete(m.ChannelID, m.ID); err != nil {
+					return fmt.Errorf("remove old message: %w", err)
+				}
+			}
+
+			markAsDone := slices.IndexFunc(m.Reactions, func(r *discordgo.MessageReactions) bool {
+				if r.Emoji.Name != w.config.Emoji {
+					return false
+				}
+
+				return r.Me
+			}) != -1
+
 			_, err := os.Stat(w.pathSoundData(m.Author.ID))
-			if errors.Is(err, os.ErrNotExist) {
+			if errors.Is(err, os.ErrNotExist) || !markAsDone {
 				if err := w.prepareSound(m); err != nil {
 					w.logger.Printf("load message: prepare: %s", err.Error())
 
@@ -110,6 +127,8 @@ func (w *WelcomeVoice) loadMessage() error {
 			} else if err != nil {
 				return fmt.Errorf("stat file: %w", err)
 			}
+
+			w.messageByUser[m.Author.ID] = m.ID
 		}
 	}
 }
@@ -213,22 +232,21 @@ func (w *WelcomeVoice) onMessageCreate(s *discordgo.Session, m *discordgo.Messag
 		return
 	}
 
+	oldMessageID, ok := w.messageByUser[m.Author.ID]
+	if ok {
+		if err := w.client.ChannelMessageDelete(m.ChannelID, oldMessageID); err != nil {
+			w.logger.Printf("remove old message: %s", err.Error())
+			return
+		}
+	}
+
 	channelID, ok := w.channelByUser[m.Author.ID]
 	if !ok {
 		return
 	}
 
-	if err := w.play(m.Author.ID, m.GuildID, channelID); errors.Is(err, os.ErrNotExist) {
-		if err := w.randomSound(m.Author.ID); err != nil {
-			w.logger.Printf("message create: random prepare: %s", err.Error())
-			return
-		}
-		if err := w.play(m.Author.ID, m.GuildID, channelID); err != nil {
-			w.logger.Printf("message create: random play: %s", err.Error())
-			return
-		}
-	} else if err != nil {
-		w.logger.Printf("message create: play: %s", err.Error())
+	if err := w.play(m.Author.ID, m.GuildID, channelID); err != nil {
+		w.logger.Printf("play new sound: %s", err.Error())
 		return
 	}
 }
