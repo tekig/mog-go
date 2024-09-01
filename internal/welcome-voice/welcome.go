@@ -189,9 +189,11 @@ func (w *WelcomeVoice) downloadSound(uri string) (string, error) {
 func (w *WelcomeVoice) convertSound(from, to string) error {
 	cmd := exec.Command("ffmpeg", "-y", "-vn", "-i", from, "-c:a", "libopus", "-page_duration", "20000", to)
 
-	if output, err := cmd.Output(); err != nil {
+	output, err := cmd.CombinedOutput()
+	if err != nil {
 		return fmt.Errorf("ffmpeg: %s, %w", string(output), err)
 	}
+	w.logger.Printf("to=%s: %s", to, string(output))
 
 	return nil
 }
