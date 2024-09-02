@@ -103,6 +103,8 @@ func (w *WelcomeVoice) loadMessage() error {
 				if err := w.client.ChannelMessageDelete(m.ChannelID, m.ID); err != nil {
 					return fmt.Errorf("remove old message: %w", err)
 				}
+
+				continue
 			}
 
 			markAsDone := slices.IndexFunc(m.Reactions, func(r *discordgo.MessageReactions) bool {
