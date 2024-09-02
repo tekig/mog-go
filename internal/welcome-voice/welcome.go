@@ -243,6 +243,8 @@ func (w *WelcomeVoice) onMessageCreate(s *discordgo.Session, m *discordgo.Messag
 		}
 	}
 
+	w.messageByUser[m.Author.ID] = m.ID
+
 	channelID, ok := w.channelByUser[m.Author.ID]
 	if !ok {
 		return
